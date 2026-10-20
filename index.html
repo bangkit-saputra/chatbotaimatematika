@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SERU-MATH AI Tutor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .chat-container {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 transparent;
+        }
+        
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 20px;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #818cf8;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .message-appear {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-purple-100 p-4">
+
+    <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl flex flex-col h-[90vh] overflow-hidden border border-indigo-50">
+        
+        <!-- Header -->
+        <div class="bg-indigo-600 text-white p-4 flex items-center shadow-md z-10">
+            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-indigo-600 text-xl font-bold mr-3 shadow-inner">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg">SERU-MATH AI Tutor</h1>
+                <p class="text-indigo-200 text-xs">Asisten Matematika Sokratik SMP</p>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container bg-slate-50">
+            <!-- Initial Greeting -->
+            <div class="flex items-start message-appear">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-2 flex-shrink-0">
+                    <i class="fas fa-robot text-sm"></i>
+                </div>
+                <div class="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm text-gray-800 max-w-[85%] text-sm leading-relaxed">
+                    Halo! 👋 Aku <strong>SERU-MATH AI Tutor</strong>. Ada PR atau materi matematika yang bikin kamu bingung hari ini? Yuk, kita bedah dan pelajari bareng-bareng! Jangan ragu buat tanya ya. 🚀
+                </div>
+            </div>
+        </div>
+
+        <!-- Typing Indicator (Hidden by default) -->
+        <div id="typing-indicator" class="hidden px-6 py-2 bg-slate-50 flex items-center">
+            <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-2 flex-shrink-0">
+                <i class="fas fa-robot text-sm"></i>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm typing-indicator">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-white border-t border-gray-100">
+            <div class="flex space-x-2">
+                <input type="text" id="user-input" class="flex-1 bg-gray-100 border-transparent rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-colors text-sm" placeholder="Ketik soal atau jawabanmu di sini..." autocomplete="off">
+                <button id="send-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-12 h-12 flex items-center justify-center transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const typingIndicator = document.getElementById('typing-indicator');
+
+        // This array will hold the conversation history for context
+        let chatHistory = [];
+
+        // Formatting system instructions strictly based on user constraints
+        const systemPrompt = `Kamu adalah "SERU-MATH AI Tutor", asisten matematika Sokratik yang ramah, sabar, dan memfasilitasi Pembelajaran Mendalam (Deep Learning) bagi murid SMP.
+
+ATURAN UTAMA (CONSTRAINTS):
+1. DILARANG KERAS memberikan jawaban angka akhir, rumus jadi, atau menyelesaikan soal secara langsung.
+2. Jika siswa bertanya atau memberikan jawaban SALAH:
+   a. Berikan apresiasi atas usaha berpikir siswa.
+   b. Berikan 1-2 pertanyaan pemantik (scaffolding) berbasis konteks nyata/visual agar siswa menemukan sendiri jawabannya.
+3. Jika siswa menjawab BENAR:
+   a. Berikan pujian spesifik atas proses bernalarnya.
+   b. Ajukan pertanyaan reflektif: "Mengapa menurutmu jawaban itu tepat?".
+4. Gunakan gaya bahasa komunikatif yang santun dan memotivasi khas remaja SMP Indonesia (gunakan sapaan ramah, sapa dengan 'kamu', bahasa kasual tapi terpelajar, sertakan emoji yang relevan).
+5. Jangan pernah merespon di luar konteks matematika SMP.`;
+
+        // Format simple markdown (bold and line breaks)
+        function formatText(text) {
+            let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            formatted = formatted.replace(/\n/g, '<br>');
+            return formatted;
+        }
+
+        function appendMessage(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex items-start message-appear ${sender === 'user' ? 'justify-end' : ''}`;
+            
+            let innerHTML = '';
+            
+            if (sender === 'user') {
+                innerHTML = `
+                    <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%] text-sm leading-relaxed">
+                        ${formatText(text)}
+                    </div>
+                `;
+            } else {
+                innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-2 flex-shrink-0">
+                        <i class="fas fa-robot text-sm"></i>
+                    </div>
+                    <div class="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm text-gray-800 max-w-[85%] text-sm leading-relaxed">
+                        ${formatText(text)}
+                    </div>
+                `;
+            }
+            
+            msgDiv.innerHTML = innerHTML;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function fetchAIResponse(userText) {
+            // Note: In this environment, the key will be injected by the system wrapper.
+            // If running locally without a wrapper, replace this with your actual Gemini API Key.
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+            // Add user message to history
+            chatHistory.push({ role: "user", parts: [{ text: userText }] });
+
+            const payload = {
+                contents: chatHistory,
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                }
+            };
+
+            try {
+                // IMPORTANT: If API key is empty (because it's not injected yet), 
+                // we provide a mock conversational response to show UI functionality.
+                if (!apiKey) {
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // simulate network delay
+                    const mockResponse = "Ini adalah simulasi balasan karena API Key belum dimasukkan. Tapi aku paham! Coba bayangkan soal ini seperti membagi permen ke teman-temanmu. Menurutmu, langkah pertama apa yang harus kita lakukan? 🤔";
+                    chatHistory.push({ role: "model", parts: [{ text: mockResponse }] });
+                    return mockResponse;
+                }
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts) {
+                    const aiText = result.candidates[0].content.parts[0].text;
+                    // Add AI response to history
+                    chatHistory.push({ role: "model", parts: [{ text: aiText }] });
+                    return aiText;
+                } else {
+                    return "Waduh, koneksiku lagi agak tersendat nih. Bisa tolong ulangi pertanyaannya? 😅";
+                }
+            } catch (error) {
+                console.error("API Error:", error);
+                return "Maaf ya, sistemku lagi ada gangguan sedikit atau API key belum diset. Coba cek lagi! 🙏";
+            }
+        }
+
+        async function handleSend() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // Clear input and show user message
+            userInput.value = '';
+            appendMessage('user', text);
+            
+            // Show typing indicator
+            typingIndicator.classList.remove('hidden');
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Fetch response from AI
+            const responseText = await fetchAIResponse(text);
+
+            // Hide typing indicator and show AI response
+            typingIndicator.classList.add('hidden');
+            appendMessage('ai', responseText);
+        }
+
+        sendBtn.addEventListener('click', handleSend);
+
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleSend();
+            }
+        });
+        
+        // Initial focus
+        userInput.focus();
+    </script>
+</body>
+</html>
